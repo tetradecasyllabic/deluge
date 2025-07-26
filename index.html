@@ -190,7 +190,6 @@
   <div id="chatApp" style="display:none;">
     <h2>Supabase Chat</h2>
 
-    <!-- Removed username and profile pic inputs above message -->
     <textarea id="msg" rows="3" placeholder="Type your message..." autocomplete="off"></textarea>
     <button id="sendBtn">Send</button>
 
@@ -226,13 +225,13 @@
     let username = null;
     let profilePicUrl = null;
 
-    // Check username & profile pic on load
+    // Load user data from localStorage
     function loadUserData() {
       username = localStorage.getItem('supabase-chat-username');
       profilePicUrl = localStorage.getItem('supabase-chat-profile-pic') || '';
     }
 
-    // Show name prompt if no username set
+    // Show name prompt if no username found
     function checkUsername() {
       loadUserData();
       if (!username) {
@@ -248,7 +247,7 @@
       }
     }
 
-    // Save name handler
+    // Save name and proceed
     saveNameBtn.addEventListener('click', () => {
       const enteredName = nameInput.value.trim();
       if (!enteredName) {
@@ -263,14 +262,13 @@
       showMessages();
     });
 
-    // Enter key saves username
     nameInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         saveNameBtn.click();
       }
     });
 
-    // Send message
+    // Send message handler
     sendBtn.addEventListener('click', async () => {
       const text = msgInput.value.trim();
       if (!text) {
@@ -282,7 +280,6 @@
       showMessages();
     });
 
-    // Enter key sends message unless Shift is pressed
     msgInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -290,7 +287,7 @@
       }
     });
 
-    // Show messages in chat
+    // Fetch and show all messages
     async function loadMessages() {
       const { data, error } = await supabase
         .from('messages')
@@ -310,7 +307,6 @@
       messages.forEach(msg => {
         const p = document.createElement('p');
         const img = document.createElement('img');
-        // Show msg.profile_pic if exists; else fallback to placeholder
         img.src = msg.profile_pic || 'https://via.placeholder.com/36';
         img.alt = 'Profile picture';
         img.onerror = () => { img.src = 'https://via.placeholder.com/36'; };
@@ -340,7 +336,7 @@
       }
     }
 
-    // Real-time subscription for new message inserts
+    // Real-time updates subscription
     supabase
       .channel('public:messages')
       .on(
@@ -352,33 +348,34 @@
       )
       .subscribe();
 
-    // Profile modal open/close
+    // Profile modal toggle
     profileBtn.addEventListener('click', () => {
       profileModal.style.display = 'flex';
       loadFollowers();
     });
+
     closeProfileBtn.addEventListener('click', () => {
       profileModal.style.display = 'none';
     });
 
-    // Save profile pic button
+    // Save profile picture URL
     saveProfilePicBtn.addEventListener('click', () => {
       const newPic = profilePicInput.value.trim();
       profilePicUrl = newPic;
       localStorage.setItem('supabase-chat-profile-pic', newPic);
-      alert('Profile picture URL saved locally. It will be used for future messages.');
+      alert('Profile picture URL saved locally and will be used for future messages.');
       profileModal.style.display = 'none';
     });
 
-    // Load followers from Supabase (assuming you have a followers table)
+    // Load followers from Supabase (followers table schema expected)
     async function loadFollowers() {
       followersList.innerHTML = '<p>Loading followers...</p>';
       try {
         /*
           Expected followers table schema:
           - id (uuid)
-          - username (text) -- the user who owns the followers
-          - follower_name (text) -- name of follower
+          - username (text) -- your username
+          - follower_name (text)
         */
         const { data, error } = await supabase
           .from('followers')
@@ -399,12 +396,12 @@
           p.textContent = f.follower_name;
           followersList.appendChild(p);
         });
-      } catch (ex) {
+      } catch {
         followersList.innerHTML = `<p style="color: red;">Failed to load followers.</p>`;
       }
     }
 
-    // On page load
+    // Initialize app
     checkUsername();
   </script>
 
