@@ -1,52 +1,122 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Simple Supabase Chat</title>
+  <title>Supabase Chat with Name Prompt</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
   <style>
     body { font-family: Arial, sans-serif; background: #222; color: #ddd; max-width: 600px; margin: auto; padding: 1rem; }
-    input, textarea { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: 5px; border: none; }
-    button { padding: 0.5rem 1rem; border: none; border-radius: 5px; background: #0066ff; color: white; cursor: pointer; }
+    input, textarea, button { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: 5px; border: none; font-size: 1rem; }
+    button { background: #0066ff; color: white; cursor: pointer; }
     #chat p { background: #333; padding: 0.5rem; border-radius: 8px; margin: 0.3rem 0; display: flex; align-items: center; gap: 0.5rem; }
     #chat img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
     .timestamp { font-size: 0.7rem; color: #999; margin-left: auto; }
+    
+    /* Fullscreen name prompt style */
+    #namePrompt {
+      position: fixed;
+      inset: 0;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      z-index: 9999;
+      color: #eee;
+    }
+    #namePrompt input {
+      width: 300px;
+      font-size: 1.2rem;
+      padding: 0.75rem;
+    }
+    #namePrompt button {
+      width: 150px;
+      font-size: 1.2rem;
+      padding: 0.75rem;
+    }
   </style>
 </head>
 <body>
 
+  <!-- Name prompt modal -->
+  <div id="namePrompt" style="display:none;">
+    <h2>Please enter your name</h2>
+    <input id="nameInput" type="text" placeholder="Your name" maxlength="30" autocomplete="off" />
+    <button id="saveNameBtn">Continue</button>
+  </div>
 
-  <h2>Supabase Chat</h2>
-  <input id="user" type="text" placeholder="Your name" />
-  <input id="pic" type="url" placeholder="Profile picture URL (optional)" />
-  <textarea id="msg" rows="3" placeholder="Type your message..."></textarea>
-  <button onclick="doSend()">Send</button>
+  <div id="chatApp" style="display:none;">
+    <h2>Supabase Chat</h2>
+    
+    <!-- Removed username input here -->
+    <input id="pic" type="url" placeholder="Profile picture URL (optional)" autocomplete="off" />
+    <textarea id="msg" rows="3" placeholder="Type your message..." autocomplete="off"></textarea>
+    <button id="sendBtn">Send</button>
 
-
-  <hr />
-
-
-  <div id="chat"></div>
-
+    <hr />
+    <div id="chat"></div>
+  </div>
 
   <script>
-    // Replace these with your Supabase project credentials
+    // Your Supabase credentials
     const SUPABASE_URL = "https://dcootnlpoothhxgslmyu.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjb290bmxwb290aGh4Z3NsbXl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1MzY2MzcsImV4cCI6MjA2OTExMjYzN30.ZHvvqIoAYM8_N2NVylqPnn7mFbwxAOmNWpcp1Wbmasg";
 
-
-    // Initialize Supabase client
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    const namePrompt = document.getElementById('namePrompt');
+    const chatApp = document.getElementById('chatApp');
+    const nameInput = document.getElementById('nameInput');
+    const saveNameBtn = document.getElementById('saveNameBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const picInput = document.getElementById('pic');
+    const msgInput = document.getElementById('msg');
+    const chatDiv = document.getElementById('chat');
 
-    // Load all messages ordered by creation time ascending
+    let username = null;
+
+    // Show the name prompt if username not set in localStorage
+    function checkUsername() {
+      username = localStorage.getItem('supabase-chat-username');
+      if (!username) {
+        namePrompt.style.display = 'flex';
+        chatApp.style.display = 'none';
+      } else {
+        namePrompt.style.display = 'none';
+        chatApp.style.display = 'block';
+        showMessages();
+      }
+    }
+
+    // Save name handler
+    saveNameBtn.addEventListener('click', () => {
+      const enteredName = nameInput.value.trim();
+      if (!enteredName) {
+        alert('Please enter your name to continue.');
+        return;
+      }
+      username = enteredName;
+      localStorage.setItem('supabase-chat-username', username);
+      namePrompt.style.display = 'none';
+      chatApp.style.display = 'block';
+      showMessages();
+    });
+
+    // Allow pressing Enter in name input to proceed
+    nameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        saveNameBtn.click();
+      }
+    });
+
+    // Load messages from Supabase
     async function loadMessages() {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
         .order('created_at', { ascending: true });
-
 
       if (error) {
         alert('Error loading messages: ' + error.message);
@@ -55,25 +125,21 @@
       return data;
     }
 
-
-    // Send a new message
+    // Send a new message to Supabase
     async function sendMessage(username, text, profile_pic) {
       const { error } = await supabase
         .from('messages')
         .insert([{ username, text, profile_pic }]);
-
 
       if (error) {
         alert('Error sending message: ' + error.message);
       }
     }
 
-
-    // Display messages in chat div
+    // Display loaded messages on the page
     async function showMessages() {
       const messages = await loadMessages();
-      const chat = document.getElementById('chat');
-      chat.innerHTML = '';
+      chatDiv.innerHTML = '';
       messages.forEach(msg => {
         const p = document.createElement('p');
         const img = document.createElement('img');
@@ -81,58 +147,61 @@
         img.alt = 'Profile picture';
         img.onerror = () => { img.src = 'https://via.placeholder.com/36'; };
 
-
         const content = document.createElement('span');
         content.innerHTML = `<strong>${msg.username}:</strong> ${msg.text}`;
-
 
         const time = document.createElement('span');
         time.className = 'timestamp';
         time.textContent = new Date(msg.created_at).toLocaleString();
 
-
         p.appendChild(img);
         p.appendChild(content);
         p.appendChild(time);
-        chat.appendChild(p);
+        chatDiv.appendChild(p);
       });
+
+      // Scroll to bottom
+      chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 
+    // Send button handler
+    sendBtn.addEventListener('click', async () => {
+      const text = msgInput.value.trim();
+      const profile_pic = picInput.value.trim();
 
-    // Handler for Send button click
-    async function doSend() {
-      const username = document.getElementById('user').value.trim();
-      const text = document.getElementById('msg').value.trim();
-      const profile_pic = document.getElementById('pic').value.trim();
-
-
-      if (!username || !text) {
-        alert('Please enter your name and message.');
+      if (!text) {
+        alert('Please enter a message.');
         return;
       }
 
-
       await sendMessage(username, text, profile_pic);
-      document.getElementById('msg').value = '';
+      msgInput.value = '';
       showMessages();
-    }
+    });
 
+    // Allow pressing Enter+Shift to add newline, Enter alone to send message
+    msgInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
 
-    // Initial load
-    showMessages();
-
-
-    // Optional: real-time updates when new messages are added
+    // Real-time subscription to new messages
     supabase
       .channel('public:messages')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        payload => {
+        (payload) => {
           showMessages();
         }
       )
       .subscribe();
+
+    // Check username & start app on page load
+    checkUsername();
   </script>
+
 </body>
 </html>
